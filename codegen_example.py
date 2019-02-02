@@ -1,5 +1,5 @@
 # from codegen_llvm import codegen
-from codegen_llvm_builder import codegen, codegen_compile
+from codegen_llvm_builder import codegen_compile
 from ctypes import CFUNCTYPE, c_int, POINTER, c_double
 
 import llvmlite.binding as llvm
@@ -54,7 +54,7 @@ def foo(x: float):
 #
 # print(target_machine.emit_assembly(llmod))
 
-cfoo = codegen_compile(foo, CFUNCTYPE(c_double, c_double))
+cfoo = codegen_compile(foo, 'double')
 print(cfoo)
 print(cfoo(0.5))
 print(foo(0.5))
