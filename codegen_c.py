@@ -116,4 +116,6 @@ def codegen_compile(func, datatype: str):
     os.unlink(code_file_path)
     os.unlink(lib_file_path)
 
+    setattr(cfunc, 'source', code)
+
     return cfunc

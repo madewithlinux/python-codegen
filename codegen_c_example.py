@@ -19,6 +19,7 @@ print(foo)
 print(cfoo)
 print(cfoo(0.5))
 print(foo(0.5))
+# print(cfoo.source)
 
 ##########################
 
