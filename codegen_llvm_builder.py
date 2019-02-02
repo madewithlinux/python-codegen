@@ -65,3 +65,29 @@ def codegen(func):
     ret: LLVMCode = func(*params)
     context.builder.ret(ret.instruction)
     return str(module)
+
+
+target_machine = llvm.Target.from_default_triple().create_target_machine()
+
+
+def codegen_compile(func, cfunctype: 'CFUNCTYPE'):
+    code = codegen(func)
+
+    llmod = llvm.parse_assembly(code)
+
+    pmb = llvm.create_pass_manager_builder()
+    pmb.opt_level = 2
+    pm = llvm.create_module_pass_manager()
+    pmb.populate(pm)
+
+    pm.run(llmod)
+
+    ee = llvm.create_mcjit_compiler(llmod, target_machine)
+    ee.finalize_object()
+    cfptr = ee.get_function_address(func.__name__)
+
+    cfunc = cfunctype(cfptr)
+    # keep the reference alive
+    # (this is probably an ugly hack? but whatever)
+    cfunc.execution_engine = ee
+    return cfunc
