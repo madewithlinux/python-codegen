@@ -1,7 +1,9 @@
-# from ctypes import CFUNCTYPE, c_int64, c_uint64, c_double
 import ctypes
 import numpy as np
 from inspect import signature
+import subprocess
+import tempfile
+import os
 
 type_double = 'double'
 
@@ -69,10 +71,36 @@ def codegen_compile(func, datatype: str):
     codegen_params = [context.get_var(codegen_type) for v in sig.parameters]
     header_params = [codegen_type + ' ' + p for p in codegen_params]
     # header
-    context.code = f"{codegen_type} {func_name}({','.join(header_params)}){{"
+    context.code = f"""
+    {codegen_type} {func_name}({','.join(header_params)}){{"""
     params = [type_dummy_instance(context, p) for p in codegen_params]
 
     ret = func(*params)
     code = context.code
     code += f'return {ret.var};\n}}\n'
-    return code
+
+    fd, code_file_path = tempfile.mkstemp(suffix='.c', text=True)
+    os.close(fd)
+
+    with open(code_file_path, 'w') as f:
+        f.write(code)
+
+    lib_file_path = code_file_path + '.so'
+    subprocess.check_call([
+        'gcc',
+        code_file_path,
+        '-o', lib_file_path,
+        '-fPIC',
+        '-shared',
+        '-O3',
+    ])
+
+    lib = ctypes.CDLL(lib_file_path)
+    cfunc = lib[func_name]
+    cfunc.restype = c_type
+    cfunc.argtypes = [c_type for x in sig.parameters]
+
+    os.unlink(code_file_path)
+    os.unlink(lib_file_path)
+
+    return cfunc
