@@ -16,5 +16,19 @@ cfoo = codegen_compile(foo, 'int')
 print(cfoo)
 print(cfoo(17))
 print(foo(17))
-print(cfoo.llvm_code)
-print(cfoo.target_asm)
+# print(cfoo.llvm_code)
+# print(cfoo.target_asm)
+
+
+def ufoo(x: float):
+    for i in range(iter):
+        x = x * (x - 1) * r
+    return x
+
+
+cufoo = codegen_compile(ufoo, 'uint')
+print(cufoo)
+print(cufoo(17))
+print(ufoo(17))
+# print(cufoo.llvm_code)
+# print(cufoo.target_asm)

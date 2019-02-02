@@ -1,4 +1,4 @@
-from ctypes import CFUNCTYPE, c_int64, POINTER, c_double
+from ctypes import CFUNCTYPE, c_int64, c_uint64, c_double
 import llvmlite.ir as ll
 import llvmlite.binding as llvm
 import numpy as np
@@ -67,19 +67,43 @@ class LLVMInt64:
         return self.general_arithmetic(other_llvcode, 'mul')
 
     def __truediv__(self, other_llvcode):
-        return self.general_arithmetic(other_llvcode, 'div')
+        return self.general_arithmetic(other_llvcode, 'sdiv')
 
     def __neg__(self):
         instr = getattr(self.context.builder, 'neg')(self.instruction)
         return LLVMInt64(self.context, instr)
 
+class LLVMUInt64:
+    def __init__(self, context: Context, instruction: ll.Instruction):
+        self.context = context
+        self.instruction = instruction
+
+    def general_arithmetic(self, other: 'LLVMUInt64', op):
+        if not isinstance(other, LLVMUInt64):
+            other = ll.values.Constant(ll.IntType(64), int(other))
+            instr = getattr(self.context.builder, op)(self.instruction, other)
+        else:
+            instr = getattr(self.context.builder, op)(self.instruction, other.instruction)
+        return LLVMUInt64(self.context, instr)
+
+    def __add__(self, other_llvcode: 'LLVMUInt64'):
+        return self.general_arithmetic(other_llvcode, 'add')
+
+    def __sub__(self, other_llvcode):
+        return self.general_arithmetic(other_llvcode, 'sub')
+
+    def __mul__(self, other_llvcode):
+        return self.general_arithmetic(other_llvcode, 'mul')
+
+    def __truediv__(self, other_llvcode):
+        return self.general_arithmetic(other_llvcode, 'udiv')
 
 param_names = [chr(i) for i in range(ord('a'), ord('z') + 1)]
 
 target_machine = llvm.Target.from_default_triple().create_target_machine()
 
 
-def codegen_compile(func, datatype):
+def codegen_compile(func, datatype: str):
     """
     :param func:
     :param datatype: either 'float', 'double' or 'int'
@@ -88,10 +112,14 @@ def codegen_compile(func, datatype):
     func_name = func.__name__
     sig = signature(func)
 
-    if datatype == 'int':
+    if datatype.startswith('int'):
         llvm_type = ll.IntType(64)
         type_dummy_instance = LLVMInt64
         c_type = c_int64
+    elif datatype.startswith('uint'):
+        llvm_type = ll.IntType(64)
+        type_dummy_instance = LLVMUInt64
+        c_type = c_uint64
     elif datatype in ['float', 'double']:
         llvm_type = ll.DoubleType()
         type_dummy_instance = LLVMDouble
