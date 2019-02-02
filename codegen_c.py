@@ -6,6 +6,8 @@ import tempfile
 import os
 
 type_double = 'double'
+type_int = 'int64_t'
+type_uint = 'uint64_t'
 
 
 class Context:
@@ -20,23 +22,22 @@ class Context:
         return var
 
 
-class CDouble:
-    def __init__(self, context: Context, var: str):
+class CTypeWrapper:
+    def __init__(self, context: Context, var: str, type: str):
         self.context = context
         self.var = var
-        self.type = type_double
+        self.type = type
 
-    def general_arithmetic(self, other: 'CDouble', op):
-        other_var = ''
-        if not isinstance(other, CDouble):
-            other_var = f'(double)({float(other)})'
+    def general_arithmetic(self, other: 'CTypeWrapper', op):
+        if not isinstance(other, CTypeWrapper):
+            other_var = f'({self.type})({other})'
         else:
             other_var = other.var
         new_var = self.context.get_var(self.type)
         self.context.code += f'{new_var} = {self.var} {op} {other_var};\n'
-        return CDouble(self.context, new_var)
+        return CTypeWrapper(self.context, new_var, self.type)
 
-    def __add__(self, other: 'CDouble'):
+    def __add__(self, other: 'CTypeWrapper'):
         return self.general_arithmetic(other, '+')
 
     def __sub__(self, other):
@@ -51,7 +52,7 @@ class CDouble:
     def __neg__(self):
         new_var = self.context.get_var(self.type)
         self.context.code += f'{new_var} = -{self.var};\n'
-        return CDouble(self.context, new_var)
+        return CTypeWrapper(self.context, new_var, self.type)
 
 
 def codegen_compile(func, datatype: str):
@@ -63,17 +64,29 @@ def codegen_compile(func, datatype: str):
     func_name = func.__name__
     sig = signature(func)
 
-    c_type = ctypes.c_double
-    codegen_type = type_double
-    type_dummy_instance = CDouble
+    if datatype.startswith('int'):
+        c_type = ctypes.c_int64
+        codegen_type = type_int
+    elif datatype.startswith('uint'):
+        c_type = ctypes.c_uint64
+        codegen_type = type_uint
+    elif datatype.startswith('float') or datatype == 'double':
+        c_type = ctypes.c_double
+        codegen_type = type_double
+    else:
+        return None
+    type_dummy_instance = CTypeWrapper
 
     context = Context()
     codegen_params = [context.get_var(codegen_type) for v in sig.parameters]
     header_params = [codegen_type + ' ' + p for p in codegen_params]
+
     # header
     context.code = f"""
-    {codegen_type} {func_name}({','.join(header_params)}){{"""
-    params = [type_dummy_instance(context, p) for p in codegen_params]
+#include <stdint.h>
+{codegen_type} {func_name}({','.join(header_params)}){{"""
+
+    params = [type_dummy_instance(context, p, codegen_type) for p in codegen_params]
 
     ret = func(*params)
     code = context.code
