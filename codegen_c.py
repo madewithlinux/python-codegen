@@ -4,6 +4,7 @@ from inspect import signature
 import subprocess
 import tempfile
 import os
+import control
 
 
 def logical_and(a, b):
@@ -24,10 +25,29 @@ type_double = 'double'
 type_int = 'int64_t'
 type_uint = 'uint64_t'
 
+py_c_type_map = {
+    np.int: 'int32_t',
+    np.int32: 'int32_t',
+    np.int64: 'int64_t',
+    np.uint: 'uint32_t',
+    np.uint32: 'uint32_t',
+    np.uint64: 'uint64_t',
+    np.float: 'double',
+    np.float32: 'float',
+    np.float64: 'double',
+    int: 'int64_t',
+    float: 'double',
+}
+
 
 class Match:
-    def __init__(self, context: 'Context'):
+    def __init__(self, context: 'Context', outvar):
         self.context = context
+        self.outvar = outvar
+        if hasattr(outvar, 'to_atoms'):
+            self.outvars = outvar.to_atoms()
+        else:
+            self.outvars = [outvar]
         # list of (condition variable, func) to be run
         # resulting code looks like:
         # v1 = <condition code>
@@ -37,9 +57,6 @@ class Match:
         # if (v1) {stuff; v3 = result}
         # else if (v2) {stuff; v3 = result}
         self.cases = []
-        # TODO: types
-        self.type = 'int'
-        self.result_var = context.get_var(self.type)
 
     def case(self, condition: str):
         # no parameters, I guess?
@@ -57,12 +74,27 @@ class Match:
     def get_result(self):
         self.context.code += "if (0) {}\n"
         for cond, func in self.cases:
-            assert isinstance(cond, CTypeWrapper)
-            self.context.code += f"else if ({cond.var}) {{\n"
+            if cond is not None:
+                assert isinstance(cond, CTypeWrapper)
+                self.context.code += f"else if ({cond.var}) {{\n"
+            else:
+                self.context.code += f"else {{\n"
             res_var: CTypeWrapper = func()
-            self.context.code += f"{self.result_var} = {res_var.var};\n"
+
+            if hasattr(res_var, 'to_atoms'):
+                assert len(res_var.to_atoms()) == self.outvars
+                for lvar, rvar in zip(self.outvars, res_var.to_atoms()):
+                    assert isinstance(lvar, CTypeWrapper)
+                    assert isinstance(rvar, CTypeWrapper)
+                    self.context.code += f"{lvar.var} = {rvar.var};\n"
+                self.outvar.from_atoms(res_var.to_atoms())
+
+            else:
+                assert len(self.outvars) == 1
+                assert isinstance(self.outvars[0], CTypeWrapper)
+                self.context.code += f"{self.outvars[0].var} = {res_var.var};\n"
             self.context.code += "}\n"
-        return CTypeWrapper(self.context, self.result_var, self.type)
+        return self.outvar
 
 
 class Context:
@@ -70,7 +102,18 @@ class Context:
     def __init__(self):
         self.last_var = 0
         self.code = ''
-        self.codegen_match = Match(self)
+
+    def match(self, var):
+        return Match(self, var)
+
+    def literal(self, x, type):
+        if isinstance(x, CTypeWrapper):
+            return x
+        type = py_c_type_map[type]
+        var = self.get_var(type)
+        # TODO: smarter casts?
+        self.code += f'{var} = ({type})({x});\n'
+        return CTypeWrapper(self, var, type)
 
     def get_var(self, type: str):
         var = f'v{self.last_var}'
@@ -85,10 +128,11 @@ class CTypeWrapper:
         self.context = context
         self.var = var
         self.type = type
-        self.codegen_match = Match(self.context)
+        # self.codegen_match = lambda out: Match(self.context, self.type, out)
 
     def general_arithmetic(self, other: 'CTypeWrapper', op):
         if not isinstance(other, CTypeWrapper):
+            # TODO: smarter casts
             other_var = f'({self.type})({other})'
         else:
             other_var = other.var
@@ -158,6 +202,8 @@ def codegen_compile(func, datatype: str):
     """
     func_name = func.__name__
     sig = signature(func)
+    # skip context parameter
+    func_params = list(sig.parameters)[1:]
 
     if datatype.startswith('int'):
         c_type = ctypes.c_int64
@@ -173,7 +219,7 @@ def codegen_compile(func, datatype: str):
     type_dummy_instance = CTypeWrapper
 
     context = Context()
-    codegen_params = [context.get_var(codegen_type) for v in sig.parameters]
+    codegen_params = [context.get_var(codegen_type) for v in func_params]
     header_params = [codegen_type + ' ' + p for p in codegen_params]
 
     # header
@@ -183,9 +229,11 @@ def codegen_compile(func, datatype: str):
 
     params = [type_dummy_instance(context, p, codegen_type) for p in codegen_params]
 
-    ret = func(*params)
+    ret = func(context, *params)
     code = context.code
     code += f'return {ret.var};\n}}\n'
+
+    print(code)
 
     fd, code_file_path = tempfile.mkstemp(suffix='.c', text=True)
     os.close(fd)
@@ -206,7 +254,7 @@ def codegen_compile(func, datatype: str):
     lib = ctypes.CDLL(lib_file_path)
     cfunc = lib[func_name]
     cfunc.restype = c_type
-    cfunc.argtypes = [c_type for x in sig.parameters]
+    cfunc.argtypes = [c_type for x in func_params]
 
     os.unlink(code_file_path)
     os.unlink(lib_file_path)

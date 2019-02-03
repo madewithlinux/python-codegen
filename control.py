@@ -1,11 +1,38 @@
 def match(something):
     if hasattr(something, 'codegen_match'):
-        return something.codegen_match
+        return something.codegen_match(something)
     else:
-        return Match()
+        return _Match(something)
 
-class Match:
-    def __init__(self):
+
+def logical_and(a, b):
+    if hasattr(a, 'logical_and'):
+        return a.logical_and(b)
+    else:
+        return a and b
+
+
+def logical_or(a, b):
+    if hasattr(a, 'logical_or'):
+        return a.logical_or(b)
+    else:
+        return a or b
+
+
+class Context:
+    def match(self, var):
+        return _Match(var)
+
+    def literal(self, x, type):
+        return type(x)
+
+
+context = Context()
+
+
+class _Match:
+    def __init__(self, out):
+        self.out = out
         self.result = None
         self.hasResult = False
 
@@ -28,6 +55,10 @@ class Match:
 
     def get_result(self):
         assert self.hasResult
+        if hasattr(self.out, 'from_atoms') and hasattr(self.result, 'to_atoms'):
+            self.out.from_atoms(self.result.to_atoms)
+        else:
+            self.out = self.result
         return self.result
 
 
