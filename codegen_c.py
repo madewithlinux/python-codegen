@@ -5,15 +5,72 @@ import subprocess
 import tempfile
 import os
 
+
+def logical_and(a, b):
+    if isinstance(a, CTypeWrapper):
+        return a.logical_and(b)
+    else:
+        return a and b
+
+
+def logical_or(a, b):
+    if isinstance(a, CTypeWrapper):
+        return a.logical_or(b)
+    else:
+        return a or b
+
+
 type_double = 'double'
 type_int = 'int64_t'
 type_uint = 'uint64_t'
 
 
+class Match:
+    def __init__(self, context: 'Context'):
+        self.context = context
+        # list of (condition variable, func) to be run
+        # resulting code looks like:
+        # v1 = <condition code>
+        # v2 = <other condition code>
+        # v3;
+        # ...
+        # if (v1) {stuff; v3 = result}
+        # else if (v2) {stuff; v3 = result}
+        self.cases = []
+        # TODO: types
+        self.type = 'int'
+        self.result_var = context.get_var(self.type)
+
+    def case(self, condition: str):
+        # no parameters, I guess?
+        def foo(func):
+            self.cases.append((condition, func))
+
+        return foo
+
+    def default(self):
+        def foo(func):
+            self.cases.append((None, func))
+
+        return foo
+
+    def get_result(self):
+        self.context.code += "if (0) {}\n"
+        for cond, func in self.cases:
+            assert isinstance(cond, CTypeWrapper)
+            self.context.code += f"else if ({cond.var}) {{\n"
+            res_var: CTypeWrapper = func()
+            self.context.code += f"{self.result_var} = {res_var.var};\n"
+            self.context.code += "}\n"
+        return CTypeWrapper(self.context, self.result_var, self.type)
+
+
 class Context:
+
     def __init__(self):
         self.last_var = 0
         self.code = ''
+        self.codegen_match = Match(self)
 
     def get_var(self, type: str):
         var = f'v{self.last_var}'
@@ -23,10 +80,12 @@ class Context:
 
 
 class CTypeWrapper:
+
     def __init__(self, context: Context, var: str, type: str):
         self.context = context
         self.var = var
         self.type = type
+        self.codegen_match = Match(self.context)
 
     def general_arithmetic(self, other: 'CTypeWrapper', op):
         if not isinstance(other, CTypeWrapper):
@@ -48,6 +107,42 @@ class CTypeWrapper:
 
     def __truediv__(self, other):
         return self.general_arithmetic(other, '/')
+
+    def __gt__(self, other):
+        return self.general_arithmetic(other, '>')
+
+    def __ge__(self, other):
+        return self.general_arithmetic(other, '>=')
+
+    def __lt__(self, other):
+        return self.general_arithmetic(other, '<')
+
+    def __le__(self, other):
+        return self.general_arithmetic(other, '<=')
+
+    def __eq__(self, other):
+        return self.general_arithmetic(other, '==')
+
+    def __lshift__(self, other):
+        return self.general_arithmetic(other, '<<')
+
+    def __rshift__(self, other):
+        return self.general_arithmetic(other, '>>')
+
+    def __and__(self, other):
+        return self.general_arithmetic(other, '&')
+
+    def __or__(self, other):
+        return self.general_arithmetic(other, '|')
+
+    def __xor__(self, other):
+        return self.general_arithmetic(other, '^')
+
+    def logical_and(self, other):
+        return self.general_arithmetic(other, '&&')
+
+    def logical_or(self, other):
+        return self.general_arithmetic(other, '||')
 
     def __neg__(self):
         new_var = self.context.get_var(self.type)

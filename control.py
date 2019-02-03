@@ -1,6 +1,6 @@
 def match(something):
     if hasattr(something, 'codegen_match'):
-        return something.codegen_match()
+        return something.codegen_match
     else:
         return Match()
 

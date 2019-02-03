@@ -1,4 +1,5 @@
 from codegen_c import codegen_compile
+import control
 import numpy as np
 
 # def foo(a, b, c, d) -> float:
@@ -27,7 +28,7 @@ iter = 1000
 r = 3
 
 
-def foo(x: float):
+def foo(x: int):
     for i in range(iter):
         #     x += x * r
         x = x * (-x + 1) * r
