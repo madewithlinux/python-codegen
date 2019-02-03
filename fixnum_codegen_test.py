@@ -4,9 +4,9 @@ import control
 import numpy as np
 
 
-def foo(a, b):
-    a = FixNum.from_int(a)
-    b = FixNum.from_int(b)
+def foo(context: control.Context, a, b):
+    a = FixNum.from_int(context, a)
+    b = FixNum.from_int(context, b)
     c = a * b
     return c.mantissa[0]
 
@@ -14,3 +14,4 @@ def foo(a, b):
 # print(foo(3, 4))
 cfoo = codegen_compile(foo, 'int')
 print(cfoo(3, 4))
+print(foo(control.context, 3, 4))

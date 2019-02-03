@@ -72,28 +72,29 @@ class Match:
         return foo
 
     def get_result(self):
-        self.context.code += "if (0) {}\n"
+        self.context.code_direct("if (0) {}\n")
         for cond, func in self.cases:
             if cond is not None:
                 assert isinstance(cond, CTypeWrapper)
-                self.context.code += f"else if ({cond.var}) {{\n"
+                self.context.code_direct(f"else if ({cond.var}) {{\n")
             else:
-                self.context.code += f"else {{\n"
+                self.context.code_direct(f"else {{\n")
             res_var: CTypeWrapper = func()
 
             if hasattr(res_var, 'to_atoms'):
-                assert len(res_var.to_atoms()) == self.outvars
+                assert len(res_var.to_atoms()) == len(self.outvars)
                 for lvar, rvar in zip(self.outvars, res_var.to_atoms()):
                     assert isinstance(lvar, CTypeWrapper)
                     assert isinstance(rvar, CTypeWrapper)
-                    self.context.code += f"{lvar.var} = {rvar.var};\n"
+                    self.context.code_line(f"{lvar.var} = {rvar.var}")
+                    rvar.var = lvar.var
                 self.outvar.from_atoms(res_var.to_atoms())
 
             else:
                 assert len(self.outvars) == 1
                 assert isinstance(self.outvars[0], CTypeWrapper)
-                self.context.code += f"{self.outvars[0].var} = {res_var.var};\n"
-            self.context.code += "}\n"
+                self.context.code_line(f"{self.outvars[0].var} = {res_var.var}")
+            self.context.code_direct("}\n")
         return self.outvar
 
 
@@ -101,25 +102,50 @@ class Context:
 
     def __init__(self):
         self.last_var = 0
-        self.code = ''
+        self._code = ''
 
     def match(self, var):
         return Match(self, var)
 
+    def code_line(self, line: str):
+        self._code += line + ';\n'
+
+    def code_direct(self, code):
+        self._code += code
+
     def literal(self, x, type):
-        if isinstance(x, CTypeWrapper):
-            return x
         type = py_c_type_map[type]
+        if isinstance(x, CTypeWrapper) and x.type == type:
+            return x
+        elif isinstance(x, CTypeWrapper):
+            x = x.var
         var = self.get_var(type)
         # TODO: smarter casts?
-        self.code += f'{var} = ({type})({x});\n'
+        self._code += f'{var} = ({type})({x});\n'
         return CTypeWrapper(self, var, type)
+
+    def cast(self, x, type):
+        return self.literal(x, type)
 
     def get_var(self, type: str):
         var = f'v{self.last_var}'
-        self.code += f'{type} {var};\n'
+        self._code += f'{type} {var};\n'
         self.last_var += 1
         return var
+
+    @staticmethod
+    def logical_and(a, b):
+        if hasattr(a, 'logical_and'):
+            return a.logical_and(b)
+        else:
+            return a and b
+
+    @staticmethod
+    def logical_or(a, b):
+        if hasattr(a, 'logical_or'):
+            return a.logical_or(b)
+        else:
+            return a or b
 
 
 class CTypeWrapper:
@@ -128,7 +154,6 @@ class CTypeWrapper:
         self.context = context
         self.var = var
         self.type = type
-        # self.codegen_match = lambda out: Match(self.context, self.type, out)
 
     def general_arithmetic(self, other: 'CTypeWrapper', op):
         if not isinstance(other, CTypeWrapper):
@@ -137,7 +162,7 @@ class CTypeWrapper:
         else:
             other_var = other.var
         new_var = self.context.get_var(self.type)
-        self.context.code += f'{new_var} = {self.var} {op} {other_var};\n'
+        self.context.code_line(f'{new_var} = {self.var} {op} {other_var}')
         return CTypeWrapper(self.context, new_var, self.type)
 
     def __add__(self, other: 'CTypeWrapper'):
@@ -190,7 +215,7 @@ class CTypeWrapper:
 
     def __neg__(self):
         new_var = self.context.get_var(self.type)
-        self.context.code += f'{new_var} = -{self.var};\n'
+        self.context.code_line(f'{new_var} = -{self.var}')
         return CTypeWrapper(self.context, new_var, self.type)
 
 
@@ -223,41 +248,41 @@ def codegen_compile(func, datatype: str):
     header_params = [codegen_type + ' ' + p for p in codegen_params]
 
     # header
-    context.code = f"""
+    context._code = f"""
 #include <stdint.h>
 {codegen_type} {func_name}({','.join(header_params)}){{"""
 
     params = [type_dummy_instance(context, p, codegen_type) for p in codegen_params]
 
     ret = func(context, *params)
-    code = context.code
+    code = context._code
     code += f'return {ret.var};\n}}\n'
 
-    print(code)
-
-    fd, code_file_path = tempfile.mkstemp(suffix='.c', text=True)
+    fd, code_file_path = tempfile.mkstemp(prefix='codegen_', suffix='.c', text=True)
     os.close(fd)
 
     with open(code_file_path, 'w') as f:
         f.write(code)
 
     lib_file_path = code_file_path + '.so'
-    subprocess.check_call([
-        'gcc',
-        code_file_path,
-        '-o', lib_file_path,
-        '-fPIC',
-        '-shared',
-        '-O3',
-    ])
 
-    lib = ctypes.CDLL(lib_file_path)
-    cfunc = lib[func_name]
-    cfunc.restype = c_type
-    cfunc.argtypes = [c_type for x in func_params]
+    try:
+        subprocess.check_call([
+            'gcc',
+            code_file_path,
+            '-o', lib_file_path,
+            '-fPIC',
+            '-shared',
+            '-O3',
+        ])
+        lib = ctypes.CDLL(lib_file_path)
+        cfunc = lib[func_name]
+        cfunc.restype = c_type
+        cfunc.argtypes = [c_type for x in func_params]
 
-    os.unlink(code_file_path)
-    os.unlink(lib_file_path)
+    finally:
+        os.unlink(code_file_path)
+        os.unlink(lib_file_path)
 
     setattr(cfunc, 'source', code)
 

@@ -1,30 +1,29 @@
-def match(something):
-    if hasattr(something, 'codegen_match'):
-        return something.codegen_match(something)
-    else:
-        return _Match(something)
-
-
-def logical_and(a, b):
-    if hasattr(a, 'logical_and'):
-        return a.logical_and(b)
-    else:
-        return a and b
-
-
-def logical_or(a, b):
-    if hasattr(a, 'logical_or'):
-        return a.logical_or(b)
-    else:
-        return a or b
-
-
 class Context:
-    def match(self, var):
+    @staticmethod
+    def match(var):
         return _Match(var)
 
-    def literal(self, x, type):
+    @staticmethod
+    def literal(x, type):
         return type(x)
+
+    @staticmethod
+    def cast(x, type):
+        return Context.literal(x, type)
+
+    @staticmethod
+    def logical_and(a, b):
+        if hasattr(a, 'logical_and'):
+            return a.logical_and(b)
+        else:
+            return a and b
+
+    @staticmethod
+    def logical_or(a, b):
+        if hasattr(a, 'logical_or'):
+            return a.logical_or(b)
+        else:
+            return a or b
 
 
 context = Context()
@@ -56,7 +55,7 @@ class _Match:
     def get_result(self):
         assert self.hasResult
         if hasattr(self.out, 'from_atoms') and hasattr(self.result, 'to_atoms'):
-            self.out.from_atoms(self.result.to_atoms)
+            self.out.from_atoms(self.result.to_atoms())
         else:
             self.out = self.result
         return self.result
