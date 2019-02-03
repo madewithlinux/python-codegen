@@ -5,6 +5,7 @@ import subprocess
 import tempfile
 import os
 import control
+import traceback
 
 
 def logical_and(a, b):
@@ -104,10 +105,20 @@ class Context:
         self.last_var = 0
         self._code = ''
 
+    def label(self) -> str:
+        """Search up the stack to find where we are being called from"""
+        for frame in traceback.extract_stack()[::-1]:
+            # find the first frame outside of this file
+            if frame.filename != __file__:
+                return f'#line {frame.lineno} "{frame.filename}"\n'
+        else:
+            return ""
+
     def match(self, var):
         return Match(self, var)
 
     def code_line(self, line: str):
+        self._code += self.label()
         self._code += line + ';\n'
 
     def code_direct(self, code):

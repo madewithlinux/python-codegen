@@ -49,6 +49,7 @@ class FixNum:
 
     def __mul__(self, y: 'FixNum'):
         x = self
+        assert x.num_words == y.num_words
         z = x.clone_zero()
 
         m = self.context.match(z)
