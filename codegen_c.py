@@ -1,3 +1,5 @@
+from __future__ import annotations
+
 import ctypes
 import numpy as np
 from inspect import signature
@@ -6,6 +8,7 @@ import tempfile
 import os
 import control
 import traceback
+from typing import List
 
 
 def logical_and(a, b):
@@ -42,13 +45,15 @@ py_c_type_map = {
 
 
 class Match:
-    def __init__(self, context: 'Context', outvar):
+    def __init__(self, context: Context, outvar):
         self.context = context
         self.outvar = outvar
         if hasattr(outvar, 'to_atoms'):
-            self.outvars = outvar.to_atoms()
+            outvars: List[CTypeWrapper] = outvar.to_atoms()
+            self.outvars = [CTypeWrapper(context, context.get_var(v.type), v.type) for v in outvars]
         else:
-            self.outvars = [outvar]
+            assert isinstance(outvar, CTypeWrapper)
+            self.outvars = [CTypeWrapper(context, context.get_var(outvar.type), outvar.type)]
         # list of (condition variable, func) to be run
         # resulting code looks like:
         # v1 = <condition code>
@@ -73,6 +78,7 @@ class Match:
         return foo
 
     def get_result(self):
+        self.context.label('condition')
         self.context.code_direct("if (0) {}\n")
         for cond, func in self.cases:
             if cond is not None:
@@ -88,13 +94,13 @@ class Match:
                     assert isinstance(lvar, CTypeWrapper)
                     assert isinstance(rvar, CTypeWrapper)
                     self.context.code_line(f"{lvar.var} = {rvar.var}")
-                    rvar.var = lvar.var
-                self.outvar.from_atoms(res_var.to_atoms())
+                self.outvar = self.outvar.from_atoms(self.outvars)
 
             else:
                 assert len(self.outvars) == 1
                 assert isinstance(self.outvars[0], CTypeWrapper)
                 self.context.code_line(f"{self.outvars[0].var} = {res_var.var}")
+                self.outvar = self.outvars[0]
             self.context.code_direct("}\n")
         return self.outvar
 
@@ -103,14 +109,24 @@ class Context:
 
     def __init__(self):
         self.last_var = 0
+        self.last_tag = 0
         self._code = ''
+        self._debug_filename_log = False
+        # self._debug_filename_log = True
 
-    def label(self) -> str:
+    def label(self, tag: str = ''):
+        self._code += self._label(tag)
+
+    def _label(self, tag: str = '') -> str:
         """Search up the stack to find where we are being called from"""
         for frame in traceback.extract_stack()[::-1]:
             # find the first frame outside of this file
             if frame.filename != __file__:
-                return f'#line {frame.lineno} "{frame.filename}"\n'
+                self.last_tag += 1
+                if self._debug_filename_log:
+                    return f'puts("// {frame.filename}:{frame.lineno} {tag} {self.last_tag}");\n'
+                else:
+                    return f'#line {frame.lineno} "{frame.filename}"\n'
         else:
             return ""
 
@@ -118,13 +134,14 @@ class Context:
         return Match(self, var)
 
     def code_line(self, line: str):
-        self._code += self.label()
+        self._code += self._label()
         self._code += line + ';\n'
 
     def code_direct(self, code):
         self._code += code
 
     def literal(self, x, type):
+        self.label('literal')
         type = py_c_type_map[type]
         if isinstance(x, CTypeWrapper) and x.type == type:
             return x
@@ -136,9 +153,11 @@ class Context:
         return CTypeWrapper(self, var, type)
 
     def cast(self, x, type):
+        self.label('cast')
         return self.literal(x, type)
 
     def get_var(self, type: str):
+        self.label('get_var')
         var = f'v{self.last_var}'
         self._code += f'{type} {var};\n'
         self.last_var += 1
@@ -166,7 +185,7 @@ class CTypeWrapper:
         self.var = var
         self.type = type
 
-    def general_arithmetic(self, other: 'CTypeWrapper', op):
+    def general_arithmetic(self, other: CTypeWrapper, op):
         if not isinstance(other, CTypeWrapper):
             # TODO: smarter casts
             other_var = f'({self.type})({other})'
@@ -176,7 +195,7 @@ class CTypeWrapper:
         self.context.code_line(f'{new_var} = {self.var} {op} {other_var}')
         return CTypeWrapper(self.context, new_var, self.type)
 
-    def __add__(self, other: 'CTypeWrapper'):
+    def __add__(self, other: CTypeWrapper):
         return self.general_arithmetic(other, '+')
 
     def __sub__(self, other):
@@ -229,6 +248,9 @@ class CTypeWrapper:
         self.context.code_line(f'{new_var} = -{self.var}')
         return CTypeWrapper(self.context, new_var, self.type)
 
+    def __str__(self):
+        return f'{self.type} {self.var}'
+
 
 def codegen_compile(func, datatype: str):
     """
@@ -261,7 +283,8 @@ def codegen_compile(func, datatype: str):
     # header
     context._code = f"""
 #include <stdint.h>
-{codegen_type} {func_name}({','.join(header_params)}){{"""
+{codegen_type} {func_name}({','.join(header_params)}){{
+"""
 
     params = [type_dummy_instance(context, p, codegen_type) for p in codegen_params]
 
