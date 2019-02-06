@@ -1,4 +1,4 @@
-from codegen_llvm_builder import codegen_compile
+from codegen.codegen_llvm_builder import codegen_compile
 import numpy as np
 
 iter = 1000

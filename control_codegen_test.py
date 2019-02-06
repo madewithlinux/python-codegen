@@ -1,4 +1,4 @@
-from codegen_c import codegen_compile
+from codegen.codegen_c import codegen_compile
 import control
 import numpy as np
 
@@ -14,4 +14,4 @@ cfoo = codegen_compile(foo, 'int')
 print(cfoo.source)
 
 for i in range(-4, 20):
-    print(i, foo(control.context, i), cfoo(i))
+    print(i, foo(control.default_context, i), cfoo(i))

@@ -43,6 +43,20 @@ py_c_type_map = {
     float: 'double',
 }
 
+py_ctypes_type_map = {
+    np.int: ctypes.c_int,
+    np.int32: ctypes.c_int,
+    np.int64: ctypes.c_long,
+    np.uint: ctypes.c_uint,
+    np.uint32: ctypes.c_uint,
+    np.uint64: ctypes.c_ulong,
+    np.float: ctypes.c_double,
+    np.float32: ctypes.c_float,
+    np.float64: ctypes.c_double,
+    int: ctypes.c_long,
+    float: ctypes.c_double,
+}
+
 
 class Match:
     def __init__(self, context: Context, outvar):
@@ -204,8 +218,20 @@ class CTypeWrapper:
     def __mul__(self, other):
         return self.general_arithmetic(other, '*')
 
-    def __truediv__(self, other):
+    def __floordiv__(self, other):
         return self.general_arithmetic(other, '/')
+
+    # TODO division
+    # def __truediv__(self, other):
+    #     if not isinstance(other, CTypeWrapper):
+    #         # TODO: smarter casts
+    #         other_var = f'(double)({other})'
+    #     else:
+    #         other_var = self.context.cast(other, 'double').var
+    #     double_self = self.context.cast(self, 'double')
+    #     new_var = self.context.get_var(self.type)
+    #     self.context.code_line(f'{new_var} = {double_self.var} / {other_var}')
+    #     return CTypeWrapper(self.context, new_var, self.type)
 
     def __gt__(self, other):
         return self.general_arithmetic(other, '>')
@@ -263,7 +289,10 @@ def codegen_compile(func, datatype: str):
     # skip context parameter
     func_params = list(sig.parameters)[1:]
 
-    if datatype.startswith('int'):
+    if datatype in py_c_type_map:
+        c_type = py_ctypes_type_map[datatype]
+        codegen_type = py_c_type_map[datatype]
+    elif datatype.startswith('int'):
         c_type = ctypes.c_int64
         codegen_type = type_int
     elif datatype.startswith('uint'):

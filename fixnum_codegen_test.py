@@ -1,7 +1,6 @@
-from fixnum import FixNum
-from codegen_c import codegen_compile
+from codegen.fixnum import FixNum
+from codegen.codegen_c import codegen_compile
 import control
-import numpy as np
 
 
 def foo(context: control.Context, a, b):
@@ -15,4 +14,4 @@ def foo(context: control.Context, a, b):
 cfoo = codegen_compile(foo, 'int')
 # print(cfoo.source)
 print('codegen', cfoo(3, 4))
-print('python', foo(control.context, 3, 4))
+print('python', foo(control.default_context, 3, 4))

@@ -1,5 +1,4 @@
-from codegen_c import codegen_compile
-import control
+from codegen.codegen_c import codegen_compile
 import numpy as np
 
 # def foo(a, b, c, d) -> float:

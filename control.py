@@ -26,7 +26,7 @@ class Context:
             return a or b
 
 
-context = Context()
+default_context = Context()
 
 
 class _Match:
