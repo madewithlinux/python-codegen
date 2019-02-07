@@ -9,6 +9,9 @@ import logging
 logging.basicConfig(level=logging.DEBUG)
 log = logging.getLogger()
 
+# this test underflows for some inputs
+np.seterr(over='ignore')
+
 
 def foo(t, context: Context, a, b, c, d, e):
     x1 = a + b
@@ -64,7 +67,7 @@ testdata = [
 
 def compile_foo(t):
     def foo2(context, a, b, c, d, e):
-        return foo(t    , context, a, b, c, d, e)
+        return foo(t, context, a, b, c, d, e)
 
     cfoo = codegen_compile(foo2, t)
     return cfoo
