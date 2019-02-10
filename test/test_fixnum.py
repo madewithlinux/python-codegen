@@ -48,3 +48,24 @@ def test_fixnum_add(a, b):
     expected = add(control.default_context, a, b)
     actual = cadd(a, b)
     assert expected == actual
+
+
+## test fixnum from_float
+xs = [
+    1.234,
+    10001.111,
+    0.001234,
+]
+@pytest.mark.parametrize("x", xs)
+def test_fixnum_from_float(x: float):
+    def fixnum_from_float(context: control.Context, i: int):
+        f = FixNum.from_float_literal(context, x)
+        return f.mantissa[0] + f.mantissa[1] + f.mantissa[2] + f.mantissa[3]
+
+    cfoo = codegen_compile(fixnum_from_float, 'int')
+    expected = fixnum_from_float(control.default_context, 0)
+    actual = cfoo(0)
+    assert expected == actual
+
+
+

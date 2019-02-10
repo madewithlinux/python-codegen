@@ -42,6 +42,24 @@ class FixNum:
         fx.mantissa[0] = context.literal(x, np.uint32)
         return fx
 
+    @staticmethod
+    def from_float_literal(context: control.Context, x: float, num_words=4):
+        x0 = context.literal(np.uint32(x), np.uint32)
+        x1 = context.literal(np.uint32((x * 2**32) % 2**32), np.uint32)
+        x2 = context.literal(np.uint32((x * 2**64) % 2**64), np.uint32)
+
+        sign = 0
+        if x > 0:
+            sign = 1
+        elif x < 0:
+            sign = -1
+        fx = FixNum(context=context, num_words=num_words, sign=sign)
+        fx.mantissa[0] = x0
+        fx.mantissa[1] = x1
+        fx.mantissa[2] = x2
+
+        return fx
+
     def clone_zero(self) -> FixNum:
         return FixNum(context=self.context,
                       num_words=self.num_words)

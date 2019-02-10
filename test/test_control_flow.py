@@ -47,3 +47,4 @@ def test_arithmetic(x):
     expected = lookup(control.default_context, x)
     actual = clookup(x)
     assert actual == expected
+
