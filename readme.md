@@ -7,3 +7,19 @@ The theory is that this will speed up some computations.
 Probably mandelbrot set and other fractals, because those are great.
 
 Uses python 3.7
+
+setup;
+```
+# clone the repo
+git clone <url>
+cd <folder>
+
+# make venv
+python3.7 -m venv .
+
+# install requirements
+pip install -r requirements.txt
+
+# install this library as writable for development
+pip install -e .
+```
