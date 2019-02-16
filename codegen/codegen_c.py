@@ -6,7 +6,6 @@ from inspect import signature
 import subprocess
 import tempfile
 import os
-import control
 import traceback
 from typing import List
 

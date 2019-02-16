@@ -1,6 +1,6 @@
 from codegen.fixnum import FixNum
 from codegen.codegen_c import codegen_compile
-import control
+from codegen import control
 
 
 def foo(context: control.Context, a, b):

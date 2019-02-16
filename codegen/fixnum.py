@@ -1,10 +1,8 @@
 from __future__ import annotations
 
 import numpy as np
-import control
+from codegen import control
 import functools
-import copy
-
 
 wordMask = np.uint64(0x00000000FFFFFFFF)
 

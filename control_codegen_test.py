@@ -1,5 +1,5 @@
 from codegen.codegen_c import codegen_compile
-import control
+from codegen import control
 import numpy as np
 
 

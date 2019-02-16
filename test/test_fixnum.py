@@ -1,11 +1,7 @@
 import pytest
-import numpy as np
-import control
-from control import Context
+from codegen import control
 from codegen.codegen_c import codegen_compile
 from codegen.fixnum import FixNum
-import random
-import logging
 
 # TODO real test when we can return a fixnum from codegen function
 

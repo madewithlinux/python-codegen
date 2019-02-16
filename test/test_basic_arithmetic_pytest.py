@@ -1,7 +1,7 @@
 import pytest
 import numpy as np
-import control
-from control import Context
+from codegen import control
+from codegen.control import Context
 from codegen.codegen_c import codegen_compile
 
 import logging
