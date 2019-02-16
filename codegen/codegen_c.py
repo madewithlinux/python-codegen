@@ -8,6 +8,7 @@ import tempfile
 import os
 import traceback
 from typing import List
+import codegen.control as control
 
 
 def logical_and(a, b):
@@ -118,7 +119,7 @@ class Match:
         return self.outvar
 
 
-class Context:
+class Context(control.Context):
 
     def __init__(self):
         self.last_var = 0
@@ -176,15 +177,13 @@ class Context:
         self.last_var += 1
         return var
 
-    @staticmethod
-    def logical_and(a, b):
+    def logical_and(self, a, b):
         if hasattr(a, 'logical_and'):
             return a.logical_and(b)
         else:
             return a and b
 
-    @staticmethod
-    def logical_or(a, b):
+    def logical_or(self, a, b):
         if hasattr(a, 'logical_or'):
             return a.logical_or(b)
         else:

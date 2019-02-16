@@ -1,32 +1,47 @@
-class Context:
-    @staticmethod
-    def match(var):
+import abc
+
+
+class Context(metaclass=abc.ABCMeta):
+    @abc.abstractmethod
+    def match(vaself, r): pass
+
+    @abc.abstractmethod
+    def literal(self, x, type): pass
+
+    @abc.abstractmethod
+    def cast(self, x, type): pass
+
+    @abc.abstractmethod
+    def logical_and(self, a, b): pass
+
+    @abc.abstractmethod
+    def logical_or(self, a, b): pass
+
+
+class DefaultContext(Context):
+    def match(self, var):
         return _Match(var)
 
-    @staticmethod
-    def literal(x, type):
+    def literal(self, x, type):
         return type(x)
 
-    @staticmethod
-    def cast(x, type):
-        return Context.literal(x, type)
+    def cast(self, x, type):
+        return self.literal(x, type)
 
-    @staticmethod
-    def logical_and(a, b):
+    def logical_and(self, a, b):
         if hasattr(a, 'logical_and'):
             return a.logical_and(b)
         else:
             return a and b
 
-    @staticmethod
-    def logical_or(a, b):
+    def logical_or(self, a, b):
         if hasattr(a, 'logical_or'):
             return a.logical_or(b)
         else:
             return a or b
 
 
-default_context = Context()
+default_context = DefaultContext()
 
 
 class _Match:
@@ -59,39 +74,3 @@ class _Match:
         else:
             self.out = self.result
         return self.result
-
-
-if __name__ == '__main__':
-    # self test
-    def foo(x: int) -> int:
-        c = match(x)
-
-        @c.case(x < 4)
-        def d():
-            return x * 8
-
-        @c.case(4 <= x < 8)
-        def d():
-            return x * 3 - 4
-
-        @c.case(x >= 8)
-        def d():
-            return x - 3
-
-        return c.get_result()
-
-
-    for x in range(10):
-        expected = -1
-        if x < 4:
-            expected = x * 8
-        elif 4 <= x < 8:
-            expected = x * 3 - 4
-        elif x >= 8:
-            expected = x - 3
-        actual = foo(x)
-        if expected != actual:
-            print(x, expected, actual)
-            break
-    else:
-        print("success")
