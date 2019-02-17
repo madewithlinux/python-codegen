@@ -64,4 +64,14 @@ def test_fixnum_from_float(x: float):
     assert expected == actual
 
 
+@pytest.mark.parametrize("x", xs)
+def test_fixnum_to_float(x: float):
+    def fixnum_to_float(context: control.Context, i: int):
+        f = FixNum.from_float_literal(context, x)
+        return f.to_float_imprecise()
+
+    cfoo = codegen_compile(fixnum_to_float, 'double')
+    expected = fixnum_to_float(control.default_context, 0)
+    actual = cfoo(0)
+    assert expected == actual
 

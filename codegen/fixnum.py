@@ -43,8 +43,8 @@ class FixNum:
     @staticmethod
     def from_float_literal(context: control.Context, x: float, num_words=4):
         x0 = context.literal(np.uint32(x), np.uint32)
-        x1 = context.literal(np.uint32((x * 2**32) % 2**32), np.uint32)
-        x2 = context.literal(np.uint32((x * 2**64) % 2**64), np.uint32)
+        x1 = context.literal(np.uint32((x * 2 ** 32) % 2 ** 32), np.uint32)
+        x2 = context.literal(np.uint32((x * 2 ** 64) % 2 ** 64), np.uint32)
 
         sign = 0
         if x > 0:
@@ -212,3 +212,9 @@ class FixNum:
 
     def __str__(self):
         return f"{self.sign}, [{','.join(str(x) for x in self.mantissa)}]"
+
+    @clone_first
+    def to_float_imprecise(self):
+        return self.context.cast(self.mantissa[0], np.float64) + \
+               self.context.cast(self.mantissa[1], np.float64) * self.context.literal(1/(1 << 32), np.float64) + \
+               self.context.cast(self.mantissa[2], np.float64) * self.context.literal(1/(1 << 64), np.float64)
