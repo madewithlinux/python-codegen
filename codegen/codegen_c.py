@@ -1,11 +1,13 @@
 from __future__ import annotations
 
 import ctypes
+from dataclasses import dataclass
 import numpy as np
 from inspect import signature
 import subprocess
 import tempfile
 import os
+import typing
 import traceback
 from typing import List
 import codegen.control as control
@@ -29,33 +31,41 @@ type_double = 'double'
 type_int = 'int64_t'
 type_uint = 'uint64_t'
 
-py_c_type_map = {
-    np.int: 'int32_t',
-    np.int32: 'int32_t',
-    np.int64: 'int64_t',
-    np.uint: 'uint32_t',
-    np.uint32: 'uint32_t',
-    np.uint64: 'uint64_t',
-    np.float: 'double',
-    np.float32: 'float',
-    np.float64: 'double',
-    int: 'int64_t',
-    float: 'double',
-}
 
-py_ctypes_type_map = {
-    np.int: ctypes.c_int,
-    np.int32: ctypes.c_int,
-    np.int64: ctypes.c_long,
-    np.uint: ctypes.c_uint,
-    np.uint32: ctypes.c_uint,
-    np.uint64: ctypes.c_ulong,
-    np.float: ctypes.c_double,
-    np.float32: ctypes.c_float,
-    np.float64: ctypes.c_double,
-    int: ctypes.c_long,
-    float: ctypes.c_double,
+@dataclass
+class _TypeInfo:
+    codegen_type: str
+    np_type: typing.Type[np.number]
+    ctype: object
+    py_type: typing.Union[typing.Type[int], typing.Type[float]]
+
+
+_known_types = [
+    _TypeInfo('int64_t', np.int, ctypes.c_int, int),
+    _TypeInfo('int32_t', np.int32, ctypes.c_int, int),
+    _TypeInfo('int64_t', np.int64, ctypes.c_long, int),
+    _TypeInfo('uint64_t', np.uint, ctypes.c_uint, int),
+    _TypeInfo('uint32_t', np.uint32, ctypes.c_uint, int),
+    _TypeInfo('uint64_t', np.uint64, ctypes.c_ulong, int),
+    _TypeInfo('double', np.float, ctypes.c_double, int),
+    _TypeInfo('float', np.float32, ctypes.c_float, float),
+    _TypeInfo('double', np.float64, ctypes.c_double, float),
+]
+
+_py_ctypes_type_map = {
+    t.np_type: t.ctype
+    for t in _known_types
 }
+# overrides
+_py_ctypes_type_map[int] = ctypes.c_long
+_py_ctypes_type_map[float] = ctypes.c_double
+
+_py_c_type_map = {
+    t.np_type: t.codegen_type
+    for t in _known_types
+}
+_py_c_type_map[int] = 'int64_t'
+_py_c_type_map[float] = 'double'
 
 
 class Match:
@@ -156,7 +166,7 @@ class Context(control.Context):
 
     def literal(self, x, type):
         self.label('literal')
-        type = py_c_type_map[type]
+        type = _py_c_type_map[type]
         if isinstance(x, CTypeWrapper) and x.type == type:
             return x
         elif isinstance(x, CTypeWrapper):
@@ -287,9 +297,9 @@ def codegen_compile(func, datatype: str):
     # skip context parameter
     func_params = list(sig.parameters)[1:]
 
-    if datatype in py_c_type_map:
-        c_type = py_ctypes_type_map[datatype]
-        codegen_type = py_c_type_map[datatype]
+    if datatype in _py_c_type_map:
+        c_type = _py_ctypes_type_map[datatype]
+        codegen_type = _py_c_type_map[datatype]
     elif datatype.startswith('int'):
         c_type = ctypes.c_int64
         codegen_type = type_int
