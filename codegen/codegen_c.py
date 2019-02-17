@@ -41,31 +41,53 @@ class _TypeInfo:
 
 
 _known_types = [
-    _TypeInfo('int64_t', np.int, ctypes.c_int, int),
     _TypeInfo('int32_t', np.int32, ctypes.c_int, int),
     _TypeInfo('int64_t', np.int64, ctypes.c_long, int),
-    _TypeInfo('uint64_t', np.uint, ctypes.c_uint, int),
     _TypeInfo('uint32_t', np.uint32, ctypes.c_uint, int),
     _TypeInfo('uint64_t', np.uint64, ctypes.c_ulong, int),
-    _TypeInfo('double', np.float, ctypes.c_double, int),
     _TypeInfo('float', np.float32, ctypes.c_float, float),
     _TypeInfo('double', np.float64, ctypes.c_double, float),
 ]
 
-_py_ctypes_type_map = {
-    t.np_type: t.ctype
-    for t in _known_types
-}
-# overrides
-_py_ctypes_type_map[int] = ctypes.c_long
-_py_ctypes_type_map[float] = ctypes.c_double
+def type_info(*,
+              codegen_type: str = None,
+              np_type: typing.Type[np.number] = None,
+              ctype: object = None,
+              py_type: typing.Union[typing.Type[int], typing.Type[float]] = None) -> _TypeInfo:
+    # must specify exactly one query parameter
+    assert sum([int(codegen_type is not None),
+                int(np_type is not None),
+                int(ctype is not None),
+                int(py_type is not None)]) == 1
+    # python type overrides
+    if py_type is not None:
+        if py_type == int:
+            np_type = np.int64
+        elif py_type == float:
+            np_type = np.float64
+        else:
+            raise ValueError(f'bad py_type: {py_type}')
+    # TODO use dicts for lookup maybe
+    for t in _known_types:
+        if t.codegen_type == codegen_type: return t
+        if t.np_type == np_type: return t
+        if t.ctype == ctype: return t
+    else:
+        raise ValueError(f'no match found for inputs {codegen_type} {np_type} {ctype} {py_type}')
 
-_py_c_type_map = {
-    t.np_type: t.codegen_type
-    for t in _known_types
-}
-_py_c_type_map[int] = 'int64_t'
-_py_c_type_map[float] = 'double'
+
+def normalize_to_type_info(t) -> _TypeInfo:
+    if t == 'int':
+        return type_info(np_type=np.int64)
+    if t == 'uint':
+        return type_info(np_type=np.uint64)
+    if t == int or t == float:
+        return type_info(py_type=t)
+    if isinstance(t, str):
+        return type_info(codegen_type=t)
+    if issubclass(t, np.number):
+        return type_info(np_type=t)
+    return type_info(ctype=t)
 
 
 class Match:
@@ -166,7 +188,8 @@ class Context(control.Context):
 
     def literal(self, x, type):
         self.label('literal')
-        type = _py_c_type_map[type]
+        # type = _py_codegen_type_map[type]
+        type = normalize_to_type_info(type).codegen_type
         if isinstance(x, CTypeWrapper) and x.type == type:
             return x
         elif isinstance(x, CTypeWrapper):
@@ -297,20 +320,27 @@ def codegen_compile(func, datatype: str):
     # skip context parameter
     func_params = list(sig.parameters)[1:]
 
-    if datatype in _py_c_type_map:
-        c_type = _py_ctypes_type_map[datatype]
-        codegen_type = _py_c_type_map[datatype]
-    elif datatype.startswith('int'):
-        c_type = ctypes.c_int64
-        codegen_type = type_int
-    elif datatype.startswith('uint'):
-        c_type = ctypes.c_uint64
-        codegen_type = type_uint
-    elif datatype.startswith('float') or datatype == 'double':
-        c_type = ctypes.c_double
-        codegen_type = type_double
-    else:
+    # if datatype in _py_codegen_type_map:
+    #     c_type = _py_ctypes_type_map[datatype]
+    #     codegen_type = _py_codegen_type_map[datatype]
+    # elif datatype.startswith('int'):
+    #     c_type = ctypes.c_int64
+    #     codegen_type = type_int
+    # elif datatype.startswith('uint'):
+    #     c_type = ctypes.c_uint64
+    #     codegen_type = type_uint
+    # elif datatype.startswith('float') or datatype == 'double':
+    #     c_type = ctypes.c_double
+    #     codegen_type = type_double
+    # else:
+    #     return None
+
+    typeinfo = normalize_to_type_info(datatype)
+    if typeinfo is None:
         return None
+    c_type = typeinfo.ctype
+    codegen_type = typeinfo.codegen_type
+
     type_dummy_instance = CTypeWrapper
 
     context = Context()
