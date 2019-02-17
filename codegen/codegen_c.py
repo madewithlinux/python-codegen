@@ -27,11 +27,6 @@ def logical_or(a, b):
         return a or b
 
 
-type_double = 'double'
-type_int = 'int64_t'
-type_uint = 'uint64_t'
-
-
 @dataclass
 class _TypeInfo:
     codegen_type: str
@@ -48,6 +43,7 @@ _known_types = [
     _TypeInfo('float', np.float32, ctypes.c_float, float),
     _TypeInfo('double', np.float64, ctypes.c_double, float),
 ]
+
 
 def type_info(*,
               codegen_type: str = None,
