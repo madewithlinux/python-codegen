@@ -12,6 +12,8 @@ import traceback
 from typing import List
 import codegen.control as control
 
+_debug = False
+
 
 def logical_and(a, b):
     if isinstance(a, CTypeWrapper):
@@ -342,9 +344,11 @@ def codegen_compile(func, return_type, *arg_types):
     code = context._code
     code += f'return {ret.var};\n}}\n'
 
-    fd, code_file_path = tempfile.mkstemp(prefix='codegen_', suffix='.c', text=True)
-    os.close(fd)
-    # code_file_path = '/tmp/testfile.c'
+    if not _debug:
+        fd, code_file_path = tempfile.mkstemp(prefix='codegen_', suffix='.c', text=True)
+        os.close(fd)
+    else:
+        code_file_path = '/tmp/testfile.c'
 
     with open(code_file_path, 'w') as f:
         f.write(code)
@@ -366,7 +370,8 @@ def codegen_compile(func, return_type, *arg_types):
         cfunc.argtypes = [normalize_to_type_info(t).ctype for t in arg_types]
 
     finally:
-        # os.unlink(code_file_path)
+        if not _debug:
+            os.unlink(code_file_path)
         os.unlink(lib_file_path)
 
     setattr(cfunc, 'source', code)

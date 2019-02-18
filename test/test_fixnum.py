@@ -3,6 +3,11 @@ from codegen import control
 from codegen.codegen_c import codegen_compile
 from codegen.fixnum import FixNum
 
+import logging
+
+logging.basicConfig(level=logging.DEBUG)
+log = logging.getLogger()
+
 # TODO real test when we can return a fixnum from codegen function
 
 int_inputs = [
@@ -52,6 +57,8 @@ xs = [
     10001.111,
     0.001234,
 ]
+
+
 @pytest.mark.parametrize("x", xs)
 def test_fixnum_from_float(x: float):
     def fixnum_from_float(context: control.Context):
@@ -72,6 +79,18 @@ def test_fixnum_to_float(x: float):
 
     cfoo = codegen_compile(fixnum_to_float, float)
     expected = fixnum_to_float(control.default_context)
-    actual = cfoo(0)
+    actual = cfoo()
     assert expected == actual
 
+
+def test_fixnum_from_string():
+    def fixnum_mul(context: control.Context):
+        d = FixNum.from_string(context, '17.57142857142857142857142858')
+        return d.to_float_imprecise()
+
+    cfoo = codegen_compile(fixnum_mul, float)
+    expected = fixnum_mul(control.default_context)
+    actual = cfoo(0)
+    # log.info(f'{expected}, {actual}')
+    tolerance = 1e-30
+    assert abs(expected - actual) < tolerance

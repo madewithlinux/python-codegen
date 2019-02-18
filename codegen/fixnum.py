@@ -32,9 +32,9 @@ class FixNum:
     def from_int(context: control.Context, x, num_words=4):
         x = context.literal(x, np.int32)
         m = context.match(context.literal(0, np.int32))
-        m.case(x > 0)(lambda: context.literal(1, np.uint32))
-        m.case(x < 0)(lambda: context.literal(-1, np.uint32))
-        m.case(x == 0)(lambda: context.literal(0, np.uint32))
+        m.case(x > 0)(lambda: context.literal(1, np.int32))
+        m.case(x < 0)(lambda: context.literal(-1, np.int32))
+        m.case(x == 0)(lambda: context.literal(0, np.int32))
         sign = m.get_result()
         fx = FixNum(context=context, num_words=num_words, sign=sign)
         fx.mantissa[0] = context.literal(x, np.uint32)
@@ -43,19 +43,38 @@ class FixNum:
     @staticmethod
     def from_float_literal(context: control.Context, x: float, num_words=4):
         x0 = context.literal(np.uint32(x), np.uint32)
-        x1 = context.literal(np.uint32((x * 2 ** 32) % 2 ** 32), np.uint32)
-        x2 = context.literal(np.uint32((x * 2 ** 64) % 2 ** 64), np.uint32)
+        x1 = context.literal(np.uint32((x * 2 ** 32) % (2 ** 32)), np.uint32)
+        x2 = context.literal(np.uint32((x * 2 ** 64) % (2 ** 64)), np.uint32)
 
         sign = 0
         if x > 0:
             sign = 1
         elif x < 0:
             sign = -1
-        fx = FixNum(context=context, num_words=num_words, sign=sign)
+        fx = FixNum(context=context,
+                    num_words=num_words,
+                    sign=context.literal(sign, np.int32))
         fx.mantissa[0] = x0
         fx.mantissa[1] = x1
         fx.mantissa[2] = x2
+        return fx
 
+    @staticmethod
+    def from_string(context: control.Context, x_str: str, num_words=4):
+        from decimal import Decimal
+        x = Decimal(x_str)
+        sign = 0
+        if x > 0:
+            sign = 1
+        elif x < 0:
+            sign = -1
+        fx = FixNum(context=context,
+                    num_words=num_words,
+                    sign=context.literal(sign, np.int32))
+        if x < 0: x = -x
+        for i in range(num_words):
+            fx.mantissa[i] = context.literal(int(x % (2 ** 32) // 1), np.uint32)
+            x = x * 2 ** 32
         return fx
 
     def clone_zero(self) -> FixNum:
@@ -215,6 +234,7 @@ class FixNum:
 
     @clone_first
     def to_float_imprecise(self):
-        return self.context.cast(self.mantissa[0], np.float64) + \
-               self.context.cast(self.mantissa[1], np.float64) * self.context.literal(1/(1 << 32), np.float64) + \
-               self.context.cast(self.mantissa[2], np.float64) * self.context.literal(1/(1 << 64), np.float64)
+        return self.context.cast(self.sign, np.float64) * (
+                self.context.cast(self.mantissa[0], np.float64) +
+                self.context.cast(self.mantissa[1], np.float64) * self.context.literal(1 / (1 << 32), np.float64) +
+                self.context.cast(self.mantissa[2], np.float64) * self.context.literal(1 / (1 << 64), np.float64))
