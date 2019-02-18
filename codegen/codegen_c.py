@@ -185,14 +185,14 @@ class Context(control.Context):
     def literal(self, x, type):
         self.label('literal')
         # type = _py_codegen_type_map[type]
-        type = normalize_to_type_info(type).codegen_type
+        type = normalize_to_type_info(type)
         if isinstance(x, CTypeWrapper) and x.type == type:
             return x
         elif isinstance(x, CTypeWrapper):
             x = x.var
         var = self.get_varname(type)
         # TODO: smarter casts?
-        self._code += f'{var} = ({type})({x});\n'
+        self._code += f'{var} = ({type.codegen_type})({x});\n'
         return CTypeWrapper(self, var, type)
 
     def cast(self, x, type):
@@ -210,7 +210,7 @@ class Context(control.Context):
 
     def get_var_wrapper(self, t: _TypeInfo) -> CTypeWrapper:
         varname = self.get_varname(t)
-        wrapper = CTypeWrapper(self, varname, t.codegen_type)
+        wrapper = CTypeWrapper(self, varname, t)
         return wrapper
 
     def logical_and(self, a, b):
@@ -228,7 +228,7 @@ class Context(control.Context):
 
 class CTypeWrapper:
 
-    def __init__(self, context: Context, var: str, type: str):
+    def __init__(self, context: Context, var: str, type: _TypeInfo):
         self.context = context
         self.var = var
         # TODO changet type to TypeInfo
@@ -237,7 +237,7 @@ class CTypeWrapper:
     def general_arithmetic(self, other: CTypeWrapper, op):
         if not isinstance(other, CTypeWrapper):
             # TODO: smarter casts
-            other_var = f'({self.type})({other})'
+            other_var = f'({self.type.codegen_type})({other})'
         else:
             other_var = other.var
         new_var = self.context.get_varname(self.type)
@@ -330,7 +330,7 @@ def codegen_compile(func, return_type, *arg_types):
 
     context = Context()
     codegen_params = [context.get_var_wrapper(normalize_to_type_info(t)) for t in arg_types]
-    header_params = [p.type + ' ' + p.var for p in codegen_params]
+    header_params = [p.type.codegen_type + ' ' + p.var for p in codegen_params]
 
     # header
     context._code = f"""
