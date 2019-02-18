@@ -3,7 +3,7 @@ import abc
 
 class Context(metaclass=abc.ABCMeta):
     @abc.abstractmethod
-    def match(vaself, r): pass
+    def match(self, r) -> '_Match': pass
 
     @abc.abstractmethod
     def literal(self, x, type): pass
@@ -12,10 +12,10 @@ class Context(metaclass=abc.ABCMeta):
     def cast(self, x, type): pass
 
     @abc.abstractmethod
-    def logical_and(self, a, b): pass
+    def logical_and(self, a, b) -> bool: pass
 
     @abc.abstractmethod
-    def logical_or(self, a, b): pass
+    def logical_or(self, a, b) -> bool: pass
 
 
 class DefaultContext(Context):

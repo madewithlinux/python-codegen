@@ -60,6 +60,24 @@ class FixNum:
         return fx
 
     @staticmethod
+    def from_float_nonliteral(context: control.Context, x: np.float64, num_words=4):
+        sign = context.literal(0, np.int32)
+        m = context.match(sign)
+        m.case(x > 0)(lambda: context.literal(1, np.int32))
+        m.case(x < 0)(lambda: context.literal(-1, np.int32))
+        m.default()(lambda: context.literal(0, np.int32))
+        sign = m.get_result()
+        fx = FixNum(context=context,
+                    num_words=num_words,
+                    sign=context.literal(sign, np.int32))
+        fx.mantissa[0] = context.literal(x, np.uint32)
+        x = x * context.literal(2 ** 32, np.float64)
+        fx.mantissa[1] = context.literal(x, np.uint32)
+        x = x * context.literal(2 ** 32, np.float64)
+        fx.mantissa[2] = context.literal(x, np.uint32)
+        return fx
+
+    @staticmethod
     def from_string(context: control.Context, x_str: str, num_words=4):
         from decimal import Decimal
         x = Decimal(x_str)

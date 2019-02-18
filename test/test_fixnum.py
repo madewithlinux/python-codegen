@@ -72,6 +72,18 @@ def test_fixnum_from_float(x: float):
 
 
 @pytest.mark.parametrize("x", xs)
+def test_fixnum_from_float_nonliteral(x: float):
+    def fixnum_from_float_nonliteral(context: control.Context, x: float):
+        f = FixNum.from_float_nonliteral(context, x)
+        return f.mantissa[0] + f.mantissa[1] + f.mantissa[2] + f.mantissa[3]
+
+    cfoo = codegen_compile(fixnum_from_float_nonliteral, int, float)
+    expected = fixnum_from_float_nonliteral(control.default_context, x)
+    actual = cfoo(x)
+    assert expected == actual
+
+
+@pytest.mark.parametrize("x", xs)
 def test_fixnum_to_float(x: float):
     def fixnum_to_float(context: control.Context):
         f = FixNum.from_float_literal(context, x)
