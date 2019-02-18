@@ -92,10 +92,10 @@ class Match:
         self.outvar = outvar
         if hasattr(outvar, 'to_atoms'):
             outvars: List[CTypeWrapper] = outvar.to_atoms()
-            self.outvars = [CTypeWrapper(context, context.get_var(v.type), v.type) for v in outvars]
+            self.outvars = [CTypeWrapper(context, context.get_varname(v.type), v.type) for v in outvars]
         else:
             assert isinstance(outvar, CTypeWrapper)
-            self.outvars = [CTypeWrapper(context, context.get_var(outvar.type), outvar.type)]
+            self.outvars = [CTypeWrapper(context, context.get_varname(outvar.type), outvar.type)]
         # list of (condition variable, func) to be run
         # resulting code looks like:
         # v1 = <condition code>
@@ -190,7 +190,7 @@ class Context(control.Context):
             return x
         elif isinstance(x, CTypeWrapper):
             x = x.var
-        var = self.get_var(type)
+        var = self.get_varname(type)
         # TODO: smarter casts?
         self._code += f'{var} = ({type})({x});\n'
         return CTypeWrapper(self, var, type)
@@ -199,12 +199,19 @@ class Context(control.Context):
         self.label('cast')
         return self.literal(x, type)
 
-    def get_var(self, type: str):
+    def get_varname(self, t: _TypeInfo) -> str:
+        if not isinstance(t, _TypeInfo):
+            t = normalize_to_type_info(t)
         self.label('get_var')
         var = f'v{self.last_var}'
-        self._code += f'{type} {var};\n'
+        self._code += f'{t.codegen_type} {var};\n'
         self.last_var += 1
         return var
+
+    def get_var_wrapper(self, t: _TypeInfo) -> CTypeWrapper:
+        varname = self.get_varname(t)
+        wrapper = CTypeWrapper(self, varname, t.codegen_type)
+        return wrapper
 
     def logical_and(self, a, b):
         if hasattr(a, 'logical_and'):
@@ -224,6 +231,7 @@ class CTypeWrapper:
     def __init__(self, context: Context, var: str, type: str):
         self.context = context
         self.var = var
+        # TODO changet type to TypeInfo
         self.type = type
 
     def general_arithmetic(self, other: CTypeWrapper, op):
@@ -232,7 +240,7 @@ class CTypeWrapper:
             other_var = f'({self.type})({other})'
         else:
             other_var = other.var
-        new_var = self.context.get_var(self.type)
+        new_var = self.context.get_varname(self.type)
         self.context.code_line(f'{new_var} = {self.var} {op} {other_var}')
         return CTypeWrapper(self.context, new_var, self.type)
 
@@ -297,7 +305,7 @@ class CTypeWrapper:
         return self.general_arithmetic(other, '||')
 
     def __neg__(self):
-        new_var = self.context.get_var(self.type)
+        new_var = self.context.get_varname(self.type)
         self.context.code_line(f'{new_var} = -{self.var}')
         return CTypeWrapper(self.context, new_var, self.type)
 
@@ -305,7 +313,7 @@ class CTypeWrapper:
         return f'{self.type} {self.var}'
 
 
-def codegen_compile(func, datatype: str):
+def codegen_compile(func, return_type, *arg_types):
     """
     :param func:
     :param datatype: either 'float', 'double' or 'int'
@@ -313,50 +321,30 @@ def codegen_compile(func, datatype: str):
     """
     func_name = func.__name__
     sig = signature(func)
-    # skip context parameter
-    func_params = list(sig.parameters)[1:]
+    assert len(arg_types) + 1 == len(sig.parameters)
 
-    # if datatype in _py_codegen_type_map:
-    #     c_type = _py_ctypes_type_map[datatype]
-    #     codegen_type = _py_codegen_type_map[datatype]
-    # elif datatype.startswith('int'):
-    #     c_type = ctypes.c_int64
-    #     codegen_type = type_int
-    # elif datatype.startswith('uint'):
-    #     c_type = ctypes.c_uint64
-    #     codegen_type = type_uint
-    # elif datatype.startswith('float') or datatype == 'double':
-    #     c_type = ctypes.c_double
-    #     codegen_type = type_double
-    # else:
-    #     return None
-
-    typeinfo = normalize_to_type_info(datatype)
-    if typeinfo is None:
+    return_typeinfo = normalize_to_type_info(return_type)
+    if return_typeinfo is None:
         return None
-    c_type = typeinfo.ctype
-    codegen_type = typeinfo.codegen_type
-
-    type_dummy_instance = CTypeWrapper
+    return_codegen_type = return_typeinfo.codegen_type
 
     context = Context()
-    codegen_params = [context.get_var(codegen_type) for v in func_params]
-    header_params = [codegen_type + ' ' + p for p in codegen_params]
+    codegen_params = [context.get_var_wrapper(normalize_to_type_info(t)) for t in arg_types]
+    header_params = [p.type + ' ' + p.var for p in codegen_params]
 
     # header
     context._code = f"""
 #include <stdint.h>
-{codegen_type} {func_name}({','.join(header_params)}){{
+{return_codegen_type} {func_name}({','.join(header_params)}){{
 """
 
-    params = [type_dummy_instance(context, p, codegen_type) for p in codegen_params]
-
-    ret = func(context, *params)
+    ret = func(context, *codegen_params)
     code = context._code
     code += f'return {ret.var};\n}}\n'
 
     fd, code_file_path = tempfile.mkstemp(prefix='codegen_', suffix='.c', text=True)
     os.close(fd)
+    # code_file_path = '/tmp/testfile.c'
 
     with open(code_file_path, 'w') as f:
         f.write(code)
@@ -374,11 +362,11 @@ def codegen_compile(func, datatype: str):
         ])
         lib = ctypes.CDLL(lib_file_path)
         cfunc = lib[func_name]
-        cfunc.restype = c_type
-        cfunc.argtypes = [c_type for x in func_params]
+        cfunc.restype = return_typeinfo.ctype
+        cfunc.argtypes = [normalize_to_type_info(t).ctype for t in arg_types]
 
     finally:
-        os.unlink(code_file_path)
+        # os.unlink(code_file_path)
         os.unlink(lib_file_path)
 
     setattr(cfunc, 'source', code)

@@ -19,7 +19,7 @@ def multiply(context: control.Context, a, b):
     return c.mantissa[0]
 
 
-cmultiply = codegen_compile(multiply, 'int')
+cmultiply = codegen_compile(multiply, int, int, int)
 
 
 @pytest.mark.parametrize("a,b", int_inputs)
@@ -36,7 +36,7 @@ def add(context: control.Context, a, b):
     return c.mantissa[0]
 
 
-cadd = codegen_compile(add, 'int')
+cadd = codegen_compile(add, int, int, int)
 
 
 @pytest.mark.parametrize("a,b", int_inputs)
@@ -54,24 +54,24 @@ xs = [
 ]
 @pytest.mark.parametrize("x", xs)
 def test_fixnum_from_float(x: float):
-    def fixnum_from_float(context: control.Context, i: int):
+    def fixnum_from_float(context: control.Context):
         f = FixNum.from_float_literal(context, x)
         return f.mantissa[0] + f.mantissa[1] + f.mantissa[2] + f.mantissa[3]
 
-    cfoo = codegen_compile(fixnum_from_float, 'int')
-    expected = fixnum_from_float(control.default_context, 0)
+    cfoo = codegen_compile(fixnum_from_float, int)
+    expected = fixnum_from_float(control.default_context)
     actual = cfoo(0)
     assert expected == actual
 
 
 @pytest.mark.parametrize("x", xs)
 def test_fixnum_to_float(x: float):
-    def fixnum_to_float(context: control.Context, i: int):
+    def fixnum_to_float(context: control.Context):
         f = FixNum.from_float_literal(context, x)
         return f.to_float_imprecise()
 
-    cfoo = codegen_compile(fixnum_to_float, 'double')
-    expected = fixnum_to_float(control.default_context, 0)
+    cfoo = codegen_compile(fixnum_to_float, float)
+    expected = fixnum_to_float(control.default_context)
     actual = cfoo(0)
     assert expected == actual
 

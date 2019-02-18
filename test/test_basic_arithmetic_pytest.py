@@ -69,7 +69,7 @@ def compile_foo(t):
     def foo2(context, a, b, c, d, e):
         return foo(t, context, a, b, c, d, e)
 
-    cfoo = codegen_compile(foo2, t)
+    cfoo = codegen_compile(foo2, t, t, t, t, t, t)
     return cfoo
 
 

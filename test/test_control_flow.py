@@ -38,7 +38,7 @@ def lookup(context: Context, x: float):
     return m.get_result()
 
 
-clookup = codegen_compile(lookup, float)
+clookup = codegen_compile(lookup, float, float)
 
 
 @pytest.mark.parametrize("x", [random.random() for x in range(2 * len(lookup_table))])
